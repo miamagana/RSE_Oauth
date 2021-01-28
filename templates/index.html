@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>RSE Oauth 2.0</title>
+    <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet" />
+  </head>
+
+  <body>
+    <h1>Hello {{ user['given_name'] }} Welcome to Our App</h1>
+    <h2>You have accessed from Google IDP</h2>
+    <h3>We have been able to get this info from Google about you</h3>
+    <table>
+      {% for key in user.keys() %}
+      <tr>
+        <th>{{ key }}</th>
+        <td>{{ user[key] }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <a href="/logout" class="link">Logout</a>
+  </body>
+</html>

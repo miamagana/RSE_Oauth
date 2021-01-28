@@ -1,7 +1,12 @@
+import json
 from fastapi import FastAPI
-from enum import Enum
-from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
+from fastapi.requests import Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth, OAuthError
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 config = Config('.env')  # read config from .env file
 oauth = OAuth(config)
@@ -14,36 +19,33 @@ oauth.register(
 )
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="secret-string")
+app.add_middleware(SessionMiddleware, secret_key="!secret")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-class ModelName(str, Enum):
-    alexnet = "alexnet"
-    resnet = "resnet"
-    lenet = "lenet"
+@app.get('/')
+async def mainPage(request: Request):
+    user = request.session.get('user')
+    if user:
+        return templates.TemplateResponse("index.html", {"request": request, "user": user })
+    return templates.TemplateResponse("login.html", {"request": request })
 
-
-@app.route('/login')
+@app.get('/login')
 async def login(request: Request):
-    # absolute url for callback
-    # we will define it below
     redirect_uri = request.url_for('auth')
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
+@app.get('/auth')
 async def auth(request: Request):
-    token = await oauth.google.authorize_access_token(request)
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except OAuthError as error:
+        return HTMLResponse(f'<h1>{error.error}</h1>')
     user = await oauth.google.parse_id_token(request, token)
-    return user
+    request.session['user'] = dict(user)
+    return RedirectResponse(url='/')
 
-@app.get("/items/{item_id}")
-async def read_item(item_id: int):
-    return {"item_id": item_id}
-
-@app.get("/models/{model_name}")
-async def get_model(model_name: ModelName):
-    if model_name == ModelName.alexnet:
-        return {"model_name": model_name, "message": "Deep Learning FTW!"}
-
-    if model_name.value == "lenet":
-        return {"model_name": model_name, "message": "LeCNN all the images"}
-
-    return {"model_name": model_name, "message": "Have some residuals"}
+@app.get('/logout')
+async def logout(request: Request):
+    request.session.pop('user', None)
+    return RedirectResponse(url='/')
